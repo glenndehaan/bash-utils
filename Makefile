@@ -1,4 +1,4 @@
-SUBDIRS := $(wildcard */.)
+SUBDIRS := $(sort $(wildcard */.))
 
 all: $(SUBDIRS)
 $(SUBDIRS):
