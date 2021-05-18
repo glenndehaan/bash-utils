@@ -1,0 +1,135 @@
+#!/bin/bash
+
+################################################################################
+# Globals                                                                      #
+################################################################################
+FILE_LOCATION=$1
+COLOR_RED="\033[91m"
+COLOR_GREEN="\033[92m"
+COLOR_YELLOW="\033[93m"
+COLOR_RESET="\033[m"
+
+################################################################################
+# Help                                                                         #
+################################################################################
+Help()
+{
+   # Display Help
+   echo "Usage: g-ssl-comp [options] directory"
+   echo "An SSL comparator that checks if the entire set (private key, certificate request and certificate) belongs to each other"
+   echo
+   echo "Options:"
+   echo "  -h     Print this help"
+   echo
+}
+
+################################################################################
+# Process the input options                                                    #
+################################################################################
+# Get the options
+while getopts ":h" option; do
+   case $option in
+      h) # Display help
+         Help
+         exit;;
+     \?) # Incorrect option
+         echo "Error: Invalid option"
+         exit;;
+   esac
+done
+
+################################################################################
+# Print banner                                                                 #
+################################################################################
+echo "   ______    ______            __    ";
+echo "  / ____/   /_  __/___  ____  / /____";
+echo " / / ________/ / / __ \/ __ \/ / ___/";
+echo "/ /_/ /_____/ / / /_/ / /_/ / (__  ) ";
+echo "\____/     /_/  \____/\____/_/____/  ";
+echo "                                     ";
+
+echo "SSL Comparator (https://github.com/glenndehaan/bash-utils)"
+echo
+
+################################################################################
+# Check dependencies                                                           #
+################################################################################
+if ! type "openssl" > /dev/null; then
+    echo -e "${COLOR_RED}[FATAL]${COLOR_RESET} Please install OpenSSL prior to running this command!"
+    exit 1;
+fi
+
+################################################################################
+# Check is file location is given                                              #
+################################################################################
+if [ -z "$FILE_LOCATION" ]; then
+    echo -e "${COLOR_RED}[FATAL]${COLOR_RESET} Please provide a path to the SSL files like this: ./ssl-helper.sh ./www.example.com"
+    exit 2;
+fi
+
+################################################################################
+# Compare functions                                                            #
+################################################################################
+REAL_FILE_LOCATION=$(realpath ${FILE_LOCATION})
+FILE_NAME=${REAL_FILE_LOCATION##*/}
+
+## Check if all certificate files are in place and get file info if they are there
+if [ ! -f "${REAL_FILE_LOCATION}/${FILE_NAME}.key" ]; then
+    echo -e "[${COLOR_YELLOW}WARNING${COLOR_RESET}] Missing Private Key file in: ${REAL_FILE_LOCATION}/${FILE_NAME}.key"
+    KEY="0 <- File Missing..."
+else
+    KEY=$(openssl rsa -noout -modulus -in ${REAL_FILE_LOCATION}/${FILE_NAME}.key | openssl md5)
+    KEY=${KEY#*= }
+fi
+
+if [ ! -f "${REAL_FILE_LOCATION}/${FILE_NAME}.csr" ]; then
+    echo -e "[${COLOR_YELLOW}WARNING${COLOR_RESET}] Missing Certificate Request file in: ${REAL_FILE_LOCATION}/${FILE_NAME}.csr"
+    CSR="0 <- File Missing..."
+else
+    CSR=$(openssl req -noout -modulus -in ${REAL_FILE_LOCATION}/${FILE_NAME}.csr | openssl md5)
+    CSR=${CSR#*= }
+fi
+
+if [ ! -f "${REAL_FILE_LOCATION}/${FILE_NAME}.crt" ]; then
+    echo -e "[${COLOR_YELLOW}WARNING${COLOR_RESET}] Missing Certificate file in: ${REAL_FILE_LOCATION}/${FILE_NAME}.crt"
+    CRT="0 <- File Missing..."
+else
+    CRT=$(openssl x509 -noout -modulus -in ${REAL_FILE_LOCATION}/${FILE_NAME}.crt | openssl md5)
+    CRT=${CRT#*= }
+fi
+
+## Check if the private key matches the certificate request
+if [ "$KEY" = "$CSR" ]; then
+    KEY_CSR="${COLOR_GREEN}OK${COLOR_RESET}"
+else
+    KEY_CSR="${COLOR_RED}Mismatch${COLOR_RESET}"
+fi
+
+## Check if the certificate matches the certificate request
+if [ "$CRT" = "$CSR" ]; then
+    CRT_CSR="${COLOR_GREEN}OK${COLOR_RESET}"
+else
+    CRT_CSR="${COLOR_RED}Mismatch${COLOR_RESET}"
+fi
+
+## Check if the certificate matches the private key
+if [ "$CRT" = "$KEY" ]; then
+    CRT_KEY="${COLOR_GREEN}OK${COLOR_RESET}"
+else
+    CRT_KEY="${COLOR_RED}Mismatch${COLOR_RESET}"
+fi
+
+## Print results
+echo
+echo -e "Result for ${COLOR_YELLOW}${FILE_NAME}${COLOR_RESET}"
+
+echo ""
+echo -e "Private Key v/s Certificate Request: ${KEY_CSR}"
+echo -e "Certificate v/s Certificate Request: ${CRT_CSR}"
+echo -e "Certificate v/s Private Key: ${CRT_KEY}"
+echo ""
+
+echo "Raw output (MD5):"
+echo "Private Key: ${KEY}"
+echo "Certificate Request: ${CSR}"
+echo "Certificate: ${CRT}"
