@@ -1,0 +1,16 @@
+Source: g-ssl-comp
+Section: utils
+Priority: optional
+Maintainer: Glenn de Haan <glenn@dehaan.cloud>
+Build-Depends: debhelper-compat (= 12)
+Standards-Version: 4.4.1
+Homepage: https://github.com/glenndehaan/bash-utils
+Vcs-Browser: https://github.com/glenndehaan/bash-utils
+Vcs-Git: https://github.com/glenndehaan/bash-utils.git
+
+Package: g-ssl-comp
+Architecture: all
+Depends: ${misc:Depends}, openssl
+Description: SSL comparator
+ An SSL comparator that checks if the entire set
+ (private key, certificate request and certificate) belongs to each other
