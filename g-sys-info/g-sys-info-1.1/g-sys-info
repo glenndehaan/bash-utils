@@ -1,0 +1,246 @@
+#!/bin/bash
+
+################################################################################
+# Help                                                                         #
+################################################################################
+Help()
+{
+   # Display Help
+   echo "Usage: g-sys-info [options]"
+   echo "A system info reporting tool"
+   echo
+   echo "Options:"
+   echo "  -h     Print this help"
+   echo
+}
+
+################################################################################
+# Process the input options                                                    #
+################################################################################
+# Get the options
+while getopts ":h" option; do
+   case $option in
+      h) # Display help
+         Help
+         exit;;
+     \?) # Incorrect option
+         echo "Error: Invalid option"
+         exit;;
+   esac
+done
+
+################################################################################
+# Functions                                                                    #
+################################################################################
+get_hostname() {
+    hostname=$(cat /proc/sys/kernel/hostname)
+
+    echo "Hostname: $hostname"
+}
+
+get_user() {
+    user=$(whoami)
+
+    echo "User: $user"
+}
+
+get_distro() {
+    name=$(awk -F= '$1=="NAME" { print $2 ;}' /etc/os-release | sed 's/"//g')
+    version=$(awk -F= '$1=="VERSION" { print $2 ;}' /etc/os-release | sed 's/"//g')
+    arch=$(uname -m)
+
+    echo "OS: $name $version $arch"
+}
+
+get_model() {
+    if [[ -d /system/app/ && -d /system/priv-app ]]; then
+        model="$(getprop ro.product.brand) $(getprop ro.product.model)"
+
+    elif [[ -f /sys/devices/virtual/dmi/id/product_name ||
+            -f /sys/devices/virtual/dmi/id/product_version ]]; then
+        model=$(< /sys/devices/virtual/dmi/id/product_name)
+        model+=" $(< /sys/devices/virtual/dmi/id/product_version)"
+
+    elif [[ -f /sys/firmware/devicetree/base/model ]]; then
+        model=$(< /sys/firmware/devicetree/base/model)
+
+    elif [[ -f /tmp/sysinfo/model ]]; then
+        model=$(< /tmp/sysinfo/model)
+    fi
+
+    echo "Model: $model"
+}
+
+get_kernel() {
+    kernel=$(uname -r)
+
+    echo "Kernel: $kernel"
+}
+
+get_uptime() {
+    s=$(< /proc/uptime)
+    s=${s/.*}
+
+    d="$((s / 60 / 60 / 24)) days"
+    h="$((s / 60 / 60 % 24)) hours"
+    m="$((s / 60 % 60)) minutes"
+
+    ((${d/ *} == 1)) && d=${d/s}
+    ((${h/ *} == 1)) && h=${h/s}
+    ((${m/ *} == 1)) && m=${m/s}
+    ((${d/ *} == 0)) && unset d
+    ((${h/ *} == 0)) && unset h
+    ((${m/ *} == 0)) && unset m
+
+    uptime=${d:+$d, }${h:+$h, }$m
+    uptime=${uptime%', '}
+    uptime=${uptime:-$s seconds}
+
+    echo "Uptime: $uptime"
+}
+
+get_shell() {
+    case ${shell_name:=${SHELL##*/}} in
+        bash)
+            [[ $BASH_VERSION ]] ||
+                BASH_VERSION=$("$SHELL" -c "printf %s \"\$BASH_VERSION\"")
+
+            shell+=${BASH_VERSION/-*}
+        ;;
+
+        sh|ash|dash|es) ;;
+
+        *ksh)
+            shell+=$("$SHELL" -c "printf %s \"\$KSH_VERSION\"")
+            shell=${shell/ * KSH}
+            shell=${shell/version}
+        ;;
+
+        osh)
+            if [[ $OIL_VERSION ]]; then
+                shell+=$OIL_VERSION
+            else
+                shell+=$("$SHELL" -c "printf %s \"\$OIL_VERSION\"")
+            fi
+        ;;
+
+        tcsh)
+            shell+=$("$SHELL" -c "printf %s \$tcsh")
+        ;;
+
+        yash)
+            shell+=$("$SHELL" --version 2>&1)
+            shell=${shell/ $shell_name}
+            shell=${shell/ Yet another shell}
+            shell=${shell/Copyright*}
+        ;;
+
+        *)
+            shell+=$("$SHELL" --version 2>&1)
+            shell=${shell/ $shell_name}
+        ;;
+    esac
+
+    shell=${shell/, version}
+    shell=${shell/xonsh\//xonsh }
+    shell=${shell/options*}
+    shell=${shell/\(*\)}
+
+    echo "Shell: $shell_name $shell"
+}
+
+get_resolution() {
+    resolution=$(xdpyinfo | grep dimensions | sed -r 's/^[^0-9]*([0-9]+x[0-9]+).*$/\1/')
+
+    echo "Resolution: $resolution"
+}
+
+get_cpu() {
+    cpu=$(cat /proc/cpuinfo | grep 'model name' | uniq | sed -n -e 's/.*: //p')
+
+    echo "CPU: $cpu"
+}
+
+get_gpu() {
+    gpu_cmd="$(lspci -mm | awk -F '\"|\" \"|\\(' \
+                                  '/"Display|"3D|"VGA/ {a[$0] = $1 " " $3 " " $4}
+                                   END {for(i in a) {if(!seen[a[i]]++) print a[i]}}')"
+    IFS=$'\n' read -d "" -ra gpus <<< "$gpu_cmd"
+
+    [[ "${gpus[0]}" == *Intel* && "${gpus[1]}" == *Intel* ]] && unset -v "gpus[0]"
+
+    for gpu in "${gpus[@]}"; do
+        case $gpu in
+            *"Advanced"*)
+                brand="${gpu/*AMD*ATI*/AMD ATI}"
+                brand="${brand:-${gpu/*AMD*/AMD}}"
+                brand="${brand:-${gpu/*ATI*/ATi}}"
+
+                gpu="${gpu/\[AMD\/ATI\] }"
+                gpu="${gpu/\[AMD\] }"
+                gpu="${gpu/OEM }"
+                gpu="${gpu/Advanced Micro Devices, Inc.}"
+                gpu="${gpu/*\[}"
+                gpu="${gpu/\]*}"
+                gpu="$brand $gpu"
+            ;;
+
+            *"NVIDIA"*)
+                gpu="${gpu/*\[}"
+                gpu="${gpu/\]*}"
+                gpu="NVIDIA $gpu"
+            ;;
+
+            *"Intel"*)
+                gpu="${gpu/*Intel/Intel}"
+                gpu="${gpu/\(R\)}"
+                gpu="${gpu/Corporation }"
+                gpu="${gpu/ \(*}"
+                gpu="${gpu/Integrated Graphics Controller}"
+                gpu="${gpu/*Xeon*/Intel HD Graphics}"
+            ;;
+
+            *) continue ;;
+        esac
+    done
+
+    echo "GPU: $gpu"
+}
+
+get_memory() {
+    free_memory=$(awk '/MemFree/ { printf "%.1f \n", $2/1024/1024 }' /proc/meminfo | sed 's/,/./g' | sed 's/ //g')
+    total_memory=$(awk '/MemTotal/ { printf "%.1f \n", $2/1024/1024 }' /proc/meminfo | sed 's/,/./g' | sed 's/ //g')
+
+    echo "Memory: $free_memory GB / $total_memory GB"
+}
+
+################################################################################
+# Print banner                                                                 #
+################################################################################
+echo "   ______    ______            __    ";
+echo "  / ____/   /_  __/___  ____  / /____";
+echo " / / ________/ / / __ \/ __ \/ / ___/";
+echo "/ /_/ /_____/ / / /_/ / /_/ / (__  ) ";
+echo "\____/     /_/  \____/\____/_/____/  ";
+echo "                                     ";
+
+echo "System Info (https://github.com/glenndehaan/bash-utils)"
+echo
+
+################################################################################
+# Output                                                                       #
+################################################################################
+get_hostname
+get_user
+
+echo
+
+get_distro
+get_model
+get_kernel
+get_uptime
+get_shell
+get_resolution
+get_cpu
+get_gpu
+get_memory
