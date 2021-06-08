@@ -1,0 +1,131 @@
+#!/bin/bash
+
+################################################################################
+# Globals                                                                      #
+################################################################################
+COMMON_NAME=$1
+COLOR_RED="\033[91m"
+COLOR_GREEN="\033[92m"
+COLOR_YELLOW="\033[93m"
+COLOR_RESET="\033[m"
+
+################################################################################
+# Help                                                                         #
+################################################################################
+Help()
+{
+   # Display Help
+   echo "Usage: g-ssl-csr-gen [options] common_name"
+   echo "An SSL Certificate Request generator"
+   echo
+   echo "Options:"
+   echo "  -h     Print this help"
+   echo
+}
+
+################################################################################
+# Process the input options                                                    #
+################################################################################
+# Get the options
+while getopts ":h" option; do
+   case $option in
+      h) # Display help
+         Help
+         exit;;
+     \?) # Incorrect option
+         echo "Error: Invalid option"
+         exit;;
+   esac
+done
+
+################################################################################
+# Print banner                                                                 #
+################################################################################
+echo "   ______    ______            __    ";
+echo "  / ____/   /_  __/___  ____  / /____";
+echo " / / ________/ / / __ \/ __ \/ / ___/";
+echo "/ /_/ /_____/ / / /_/ / /_/ / (__  ) ";
+echo "\____/     /_/  \____/\____/_/____/  ";
+echo "                                     ";
+
+echo "SSL Certificate Request Generator (https://github.com/glenndehaan/bash-utils)"
+echo
+
+################################################################################
+# Check dependencies                                                           #
+################################################################################
+if ! type "openssl" > /dev/null; then
+    echo -e "${COLOR_RED}[FATAL]${COLOR_RESET} Please install OpenSSL prior to running this command!"
+    exit 1;
+fi
+
+################################################################################
+# Check if common name is given                                                #
+################################################################################
+if [ -z "$COMMON_NAME" ]; then
+    echo -e "${COLOR_RED}[FATAL]${COLOR_RESET} Please provide a common name like this: g-ssl-csr-gen www.example.com"
+    exit 2;
+fi
+
+################################################################################
+# Generate csr and key file                                                    #
+################################################################################
+REAL_FILE_LOCATION=$(realpath ${COMMON_NAME})
+
+CSR_C=""
+CSR_ST=""
+CSR_L=""
+CSR_O=""
+CSR_OU=""
+CSR_CN=${COMMON_NAME/star./*.}
+CSR_E=""
+
+## Check if the private key already exists (Then don't override this)
+if [ -f "$REAL_FILE_LOCATION/$COMMON_NAME.key" ]; then
+    echo -e "${COLOR_RED}[FATAL]${COLOR_RESET} The following file already exists: $REAL_FILE_LOCATION/$COMMON_NAME.key"
+    exit 3;
+fi
+
+## Check if an .g-ssl-csr-gen.defaults.conf exists
+if [ ! -f "${HOME}/.g-ssl-csr-gen.defaults.conf" ]; then
+    echo -e "${COLOR_YELLOW}[WARNING]${COLOR_RESET} Missing defaults: ${HOME}/.g-ssl-csr-gen.defaults.conf"
+else
+    echo -e "${COLOR_GREEN}[NOTICE]${COLOR_RESET} Using defaults: ${HOME}/.g-ssl-csr-gen.defaults.conf"
+    source "${HOME}/.g-ssl-csr-gen.defaults.conf"
+fi
+
+echo ""
+echo "Follow the instructions below:"
+echo ""
+
+mkdir -p $REAL_FILE_LOCATION
+if [ ! -f "${HOME}/.g-ssl-csr-gen.defaults.conf" ]; then
+    read -r -p "Country Name (2 letter code): " CSR_C
+    read -r -p "State or Province Name (full name): " CSR_ST
+    read -r -p "Locality Name (eg, city): " CSR_L
+    read -r -p "Organization Name (eg, company): " CSR_O
+    read -r -p "Organizational Unit Name (eg, section): " CSR_OU
+    read -r -p "Email Address: " CSR_E
+
+    echo ""
+    read -r -p "Do want to save these values and use them as defaults for the next time? [y/N]: " response
+    if [[ "$response" =~ ^([yY][eE][sS]|[yY])$ ]]
+    then
+        cat << EOF > "${HOME}/.g-ssl-csr-gen.defaults.conf"
+CSR_C="${CSR_C}"
+CSR_ST="${CSR_ST}"
+CSR_L="${CSR_L}"
+CSR_O="${CSR_O}"
+CSR_OU="${CSR_OU}"
+CSR_E="${CSR_E}"
+EOF
+
+        echo "Saved config to: ${HOME}/.g-ssl-csr-gen.defaults.conf"
+    fi
+
+    openssl req -out $REAL_FILE_LOCATION/$COMMON_NAME.csr -new -newkey rsa:2048 -nodes -keyout $REAL_FILE_LOCATION/$COMMON_NAME.key -subj "/C=${CSR_C}/ST=${CSR_ST}/L=${CSR_L}/O=${CSR_O}/OU=${CSR_OU}/CN=${CSR_CN}/emailAddress=${CSR_E}"
+    echo -e "${COLOR_GREEN}Generated a KEY and CSR file: ${REAL_FILE_LOCATION}/${COMMON_NAME}.csr, ${REAL_FILE_LOCATION}/${COMMON_NAME}.key${COLOR_RESET}"
+else
+    openssl req -out $REAL_FILE_LOCATION/$COMMON_NAME.csr -new -newkey rsa:2048 -nodes -keyout $REAL_FILE_LOCATION/$COMMON_NAME.key -subj "/C=${CSR_C}/ST=${CSR_ST}/L=${CSR_L}/O=${CSR_O}/OU=${CSR_OU}/CN=${CSR_CN}/emailAddress=${CSR_E}"
+    echo -e "${COLOR_GREEN}Generated a KEY and CSR file: ${REAL_FILE_LOCATION}/${COMMON_NAME}.csr, ${REAL_FILE_LOCATION}/${COMMON_NAME}.key${COLOR_RESET}"
+fi
