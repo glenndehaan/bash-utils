@@ -1,0 +1,63 @@
+#!/bin/bash
+
+################################################################################
+# Help                                                                         #
+################################################################################
+Help()
+{
+   # Display Help
+   echo "Usage: g-example-http-server [options]"
+   echo "A simple HTTP example server that runs on port 8080"
+   echo
+   echo "Options:"
+   echo "  -h     Print this help"
+   echo
+}
+
+################################################################################
+# Process the input options                                                    #
+################################################################################
+# Get the options
+while getopts ":h" option; do
+   case $option in
+      h) # Display help
+         Help
+         exit;;
+     \?) # Incorrect option
+         echo "Error: Invalid option"
+         exit;;
+   esac
+done
+
+################################################################################
+# Print banner                                                                 #
+################################################################################
+echo "   ______    ______            __    ";
+echo "  / ____/   /_  __/___  ____  / /____";
+echo " / / ________/ / / __ \/ __ \/ / ___/";
+echo "/ /_/ /_____/ / / /_/ / /_/ / (__  ) ";
+echo "\____/     /_/  \____/\____/_/____/  ";
+echo "                                     ";
+
+echo "Example HTTP Server (https://github.com/glenndehaan/bash-utils)"
+echo
+
+echo "Server Initialized on port 8080!"
+echo
+echo "-----------------------------------------------------------------"
+echo ""
+
+################################################################################
+# Server                                                                       #
+################################################################################
+IP=$(ifconfig | grep -Eo 'inet (addr:)?([0-9]*\.){3}[0-9]*' | grep -Eo '([0-9]*\.){3}[0-9]*' | grep -v '127.0.0.1')
+
+PORT=8080
+
+MESSAGE="Hello World!\n\nMy IP: ${IP}"
+RESPONSE="HTTP/1.1 200 OK\r\nConnection: keep-alive\r\n\r\n${MESSAGE}\r\n"
+
+while { echo -en "$RESPONSE"; } | nc -N -l "${PORT}"; do
+  echo "-----------------------------------------------------------------"
+  echo ""
+done
