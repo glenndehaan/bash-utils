@@ -1,0 +1,131 @@
+#!/bin/bash
+
+################################################################################
+# Globals                                                                      #
+################################################################################
+COMMON_NAME=$1
+COLOR_RED="\033[91m"
+COLOR_GREEN="\033[92m"
+COLOR_YELLOW="\033[93m"
+COLOR_RESET="\033[m"
+
+################################################################################
+# Help                                                                         #
+################################################################################
+Help()
+{
+   # Display Help
+   echo "Usage: g-ssl-crt-gen [options] common_name"
+   echo "An SSL Certificate generator"
+   echo
+   echo "Options:"
+   echo "  -h     Print this help"
+   echo
+}
+
+################################################################################
+# Process the input options                                                    #
+################################################################################
+# Get the options
+while getopts ":h" option; do
+   case $option in
+      h) # Display help
+         Help
+         exit;;
+     \?) # Incorrect option
+         echo "Error: Invalid option"
+         exit;;
+   esac
+done
+
+################################################################################
+# Print banner                                                                 #
+################################################################################
+echo "   ______    ______            __    ";
+echo "  / ____/   /_  __/___  ____  / /____";
+echo " / / ________/ / / __ \/ __ \/ / ___/";
+echo "/ /_/ /_____/ / / /_/ / /_/ / (__  ) ";
+echo "\____/     /_/  \____/\____/_/____/  ";
+echo "                                     ";
+
+echo "SSL Certificate Generator (https://github.com/glenndehaan/bash-utils)"
+echo
+
+################################################################################
+# Check dependencies                                                           #
+################################################################################
+if ! type "openssl" > /dev/null; then
+    echo -e "${COLOR_RED}[FATAL]${COLOR_RESET} Please install OpenSSL prior to running this command!"
+    exit 1;
+fi
+
+################################################################################
+# Check if common name is given                                                #
+################################################################################
+if [ -z "$COMMON_NAME" ]; then
+    echo -e "${COLOR_RED}[FATAL]${COLOR_RESET} Please provide a common name like this: g-ssl-crt-gen www.example.com"
+    exit 2;
+fi
+
+################################################################################
+# Generate crt and key file                                                    #
+################################################################################
+REAL_FILE_LOCATION=$(realpath ${COMMON_NAME})
+
+CRT_C=""
+CRT_ST=""
+CRT_L=""
+CRT_O=""
+CRT_OU=""
+CRT_CN=${COMMON_NAME/star./*.}
+CRT_E=""
+
+## Check if the private key already exists (Then don't override this)
+if [ -f "$REAL_FILE_LOCATION/$COMMON_NAME.key" ]; then
+    echo -e "${COLOR_RED}[FATAL]${COLOR_RESET} The following file already exists: $REAL_FILE_LOCATION/$COMMON_NAME.key"
+    exit 3;
+fi
+
+## Check if an .g-ssl-crt-gen.defaults.conf exists
+if [ ! -f "${HOME}/.g-ssl-crt-gen.defaults.conf" ]; then
+    echo -e "${COLOR_YELLOW}[WARNING]${COLOR_RESET} Missing defaults: ${HOME}/.g-ssl-crt-gen.defaults.conf"
+else
+    echo -e "${COLOR_GREEN}[NOTICE]${COLOR_RESET} Using defaults: ${HOME}/.g-ssl-crt-gen.defaults.conf"
+    source "${HOME}/.g-ssl-crt-gen.defaults.conf"
+fi
+
+echo ""
+echo "Follow the instructions below:"
+echo ""
+
+mkdir -p $REAL_FILE_LOCATION
+if [ ! -f "${HOME}/.g-ssl-crt-gen.defaults.conf" ]; then
+    read -r -p "Country Name (2 letter code): " CRT_C
+    read -r -p "State or Province Name (full name): " CRT_ST
+    read -r -p "Locality Name (eg, city): " CRT_L
+    read -r -p "Organization Name (eg, company): " CRT_O
+    read -r -p "Organizational Unit Name (eg, section): " CRT_OU
+    read -r -p "Email Address: " CRT_E
+
+    echo ""
+    read -r -p "Do want to save these values and use them as defaults for the next time? [y/N]: " response
+    if [[ "$response" =~ ^([yY][eE][sS]|[yY])$ ]]
+    then
+        cat << EOF > "${HOME}/.g-ssl-crt-gen.defaults.conf"
+CRT_C="${CRT_C}"
+CRT_ST="${CRT_ST}"
+CRT_L="${CRT_L}"
+CRT_O="${CRT_O}"
+CRT_OU="${CRT_OU}"
+CRT_E="${CRT_E}"
+EOF
+
+        echo "Saved config to: ${HOME}/.g-ssl-crt-gen.defaults.conf"
+    fi
+
+    openssl req -x509 -sha256 -days 365 -out $REAL_FILE_LOCATION/$COMMON_NAME.crt -newkey rsa:2048 -nodes -keyout $REAL_FILE_LOCATION/$COMMON_NAME.key -subj "/C=${CRT_C}/ST=${CRT_ST}/L=${CRT_L}/O=${CRT_O}/OU=${CRT_OU}/CN=${CRT_CN}/emailAddress=${CRT_E}"
+    echo -e "${COLOR_GREEN}Generated a KEY and CRT file: ${REAL_FILE_LOCATION}/${COMMON_NAME}.crt, ${REAL_FILE_LOCATION}/${COMMON_NAME}.key${COLOR_RESET}"
+else
+    openssl req -x509 -sha256 -days 365 -out $REAL_FILE_LOCATION/$COMMON_NAME.crt -newkey rsa:2048 -nodes -keyout $REAL_FILE_LOCATION/$COMMON_NAME.key -subj "/C=${CRT_C}/ST=${CRT_ST}/L=${CRT_L}/O=${CRT_O}/OU=${CRT_OU}/CN=${CRT_CN}/emailAddress=${CRT_E}"
+    echo -e "${COLOR_GREEN}Generated a KEY and CRT file: ${REAL_FILE_LOCATION}/${COMMON_NAME}.crt, ${REAL_FILE_LOCATION}/${COMMON_NAME}.key${COLOR_RESET}"
+fi

@@ -1,0 +1,15 @@
+Source: g-ssl-crt-gen
+Section: utils
+Priority: optional
+Maintainer: Glenn de Haan <glenn@dehaan.cloud>
+Build-Depends: debhelper-compat (= 12)
+Standards-Version: 4.4.1
+Homepage: https://github.com/glenndehaan/bash-utils
+Vcs-Browser: https://github.com/glenndehaan/bash-utils
+Vcs-Git: https://github.com/glenndehaan/bash-utils.git
+
+Package: g-ssl-crt-gen
+Architecture: all
+Depends: ${misc:Depends}, openssl
+Description: SSL Certificate Generator
+ An SSL certificate Generator combined with a matching Private Key
