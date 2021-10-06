@@ -1,0 +1,120 @@
+#!/bin/bash
+
+################################################################################
+# Globals                                                                      #
+################################################################################
+COLOR_RED="\033[91m"
+COLOR_GREEN="\033[92m"
+COLOR_YELLOW="\033[93m"
+COLOR_RESET="\033[m"
+
+################################################################################
+# Help                                                                         #
+################################################################################
+Help()
+{
+   # Display Help
+   echo "Usage: g-nginx-dynamic-whitelists [options]"
+   echo "An Nginx Dynamic IP Whitelists Generator"
+   echo
+   echo "Options:"
+   echo "  -h     Print this help"
+   echo
+}
+
+################################################################################
+# Process the input options                                                    #
+################################################################################
+# Get the options
+while getopts ":h" option; do
+   case $option in
+      h) # Display help
+         Help
+         exit;;
+     \?) # Incorrect option
+         echo "Error: Invalid option"
+         exit;;
+   esac
+done
+
+################################################################################
+# Print banner                                                                 #
+################################################################################
+echo "   ______    ______            __    ";
+echo "  / ____/   /_  __/___  ____  / /____";
+echo " / / ________/ / / __ \/ __ \/ / ___/";
+echo "/ /_/ /_____/ / / /_/ / /_/ / (__  ) ";
+echo "\____/     /_/  \____/\____/_/____/  ";
+echo "                                     ";
+
+echo "Nginx Dynamic Whitelists Generator (https://github.com/glenndehaan/bash-utils)"
+echo
+
+################################################################################
+# Generate new Nginx configs                                                   #
+################################################################################
+# Define global variables
+CONFIG_FILE="/etc/g-nginx-dynamic-whitelists.conf"
+EXPORT_DIR="/opt/g-nginx-dynamic-whitelists"
+SERVER_HOST="localhost"
+SERVER_PORT=13371
+
+# Check if we are running as root user
+if [ "$EUID" -ne 0 ]
+  then echo -e "[${COLOR_RED}FATAL${COLOR_RESET}] Please run as root"
+  exit
+fi
+
+# Define helper functions
+function urldecode() { : "${*//+/ }"; echo -e "${_//%/\\x}"; }
+
+# Check if config file exists. If so load it
+if test -f "$CONFIG_FILE"; then
+    echo -e "[${COLOR_GREEN}INFO${COLOR_RESET}] Config: $CONFIG_FILE loaded!"
+    source $CONFIG_FILE
+fi
+
+# Check if the conf directory exists
+if [[ ! -d "$EXPORT_DIR" ]]
+then
+  mkdir "$EXPORT_DIR"
+  echo -e "[${COLOR_GREEN}INFO${COLOR_RESET}] $EXPORT_DIR created on filesystem!"
+fi
+
+# Get data from socket
+DATA=$(echo '' | nc -q 0 $SERVER_HOST $SERVER_PORT)
+
+# Check if the netcat command succeeded
+if [ $? -eq 0 ]; then
+    echo -e "[${COLOR_GREEN}INFO${COLOR_RESET}] Received data from server: $SERVER_HOST:$SERVER_PORT!"
+else
+    echo -e "[${COLOR_RED}FATAL${COLOR_RESET}] Failed to get data from server $SERVER_HOST:$SERVER_PORT!"
+    exit 1;
+fi
+
+# Split data by newline
+while IFS= read -r line; do
+  # Split data by separator
+  DATA_SPLIT=(${line//;/ })
+  # Define project name (This is always the first item in the line)
+  PROJECT_NAME=${DATA_SPLIT[0]}
+
+  # Create/overwrite project config
+  true > "$EXPORT_DIR/$PROJECT_NAME.conf"
+  echo -e "[${COLOR_GREEN}INFO${COLOR_RESET}] $EXPORT_DIR/$PROJECT_NAME.conf file created on filesystem!"
+
+  # Loop over IP's
+  for ip in "${DATA_SPLIT[@]:1}"
+  do
+    IP_SPLIT=(${ip//|/ })
+    echo "allow ${IP_SPLIT[0]}; # $(urldecode "${IP_SPLIT[1]}")" >> "$EXPORT_DIR/$PROJECT_NAME.conf"
+  done
+done <<< "$DATA"
+
+# Check if nginx is installed
+if ! which nginx > /dev/null 2>&1; then
+  echo -e "[${COLOR_YELLOW}WARN${COLOR_RESET}] Nginx not installed. Skipping reloading config..."
+else
+  service nginx reload
+  echo -e "[${COLOR_GREEN}INFO${COLOR_RESET}] Reloading Nginx config"
+fi
