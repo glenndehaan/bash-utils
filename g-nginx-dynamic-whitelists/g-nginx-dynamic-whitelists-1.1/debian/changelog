@@ -1,0 +1,11 @@
+g-nginx-dynamic-whitelists (1.1-1) stable; urgency=medium
+
+  * Fixed missing cron PATH
+
+ -- Glenn de Haan <glenn@dehaan.cloud>  Tue, 12 Oct 2021 13:50:00 +0200
+
+g-nginx-dynamic-whitelists (1.0-1) stable; urgency=medium
+
+  * Initial release
+
+ -- Glenn de Haan <glenn@dehaan.cloud>  Wed, 6 Oct 2021 14:51:00 +0200

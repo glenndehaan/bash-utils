@@ -1,0 +1,16 @@
+Source: g-nginx-dynamic-whitelists
+Section: utils
+Priority: optional
+Maintainer: Glenn de Haan <glenn@dehaan.cloud>
+Build-Depends: debhelper-compat (= 12)
+Standards-Version: 4.4.1
+Homepage: https://github.com/glenndehaan/bash-utils
+Vcs-Browser: https://github.com/glenndehaan/bash-utils
+Vcs-Git: https://github.com/glenndehaan/bash-utils.git
+
+Package: g-nginx-dynamic-whitelists
+Architecture: all
+Depends: ${misc:Depends}
+Description: Nginx Dynamic Whitelists Generator
+ An Nginx Dynamic IP Whitelists Generator
+ This system pulls IP information from a global TCP server
